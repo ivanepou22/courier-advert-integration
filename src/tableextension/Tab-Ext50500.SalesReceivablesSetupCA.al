@@ -7,6 +7,14 @@ tableextension 50500 "Sales & Receivables Setup CA" extends "Sales & Receivables
         {
             DataClassification = ToBeClassified;
         }
+        field(50501; "Courier Customer No."; Code[50])
+        {
+            TableRelation = Customer."No.";
+        }
+        field(50502; "Courier Resource No."; Code[50])
+        {
+            TableRelation = Resource."No.";
+        }
     }
 
     keys
