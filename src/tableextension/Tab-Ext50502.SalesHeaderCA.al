@@ -29,7 +29,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         RequestContent: Text;
         ResponseContent: Text;
 
-    procedure GenerateSalesInvoice(StartDate: Date; EndDate: Date; SectionType: Enum "Section Type")
+    procedure GenerateSalesInvoice(StartDate: Date; EndDate: Date; SectionType: Enum "Section Type"; PostingDate: Date)
     var
         SalesHeader: Record "Sales Header";
         SalesLines: Record "Sales Line";
@@ -76,7 +76,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
             if RequestJson(ServerUrl, HttpMethod, '', '', RequestJson, ResponseJson) then begin
                 if IsLastHttpSuccess() then begin
                     ResponseJson.WriteTo(ResponseContent);
-                    createSalesInvoice(ResponseContent);
+                    createSalesInvoice(ResponseContent, PostingDate);
                 end
                 else begin
                     Error(StrSubstNo('Http Request Failed - %1: %2', GetLastHttpStatusCode(), GetLastHttpReasonPhrase()));
@@ -88,7 +88,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         end;
     end;
 
-    procedure createSalesInvoice(ResponseContent: Text)
+    procedure createSalesInvoice(ResponseContent: Text; PostingDate: Date)
     var
         ResponseObject: JsonObject;
         InsideResObject: JsonObject;
@@ -96,7 +96,18 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         InsideResJsonToken: JsonToken;
         InputResJsonToken: JsonToken;
         ResponseArray: JsonArray;
+        SalesReceivablesSetup: Record "Sales & Receivables Setup";
+        Customer: Record Customer;
+        Resource: Record Resource;
+        SalesHeader: Record "Sales Header";
+        SalesLine: Record "Sales Line";
     begin
+        SalesReceivablesSetup.Get();
+        SalesReceivablesSetup.TestField("Courier Customer No.");
+        SalesReceivablesSetup.TestField("Courier Resource No.");
+
+        Customer.Get(SalesReceivablesSetup."Courier Customer No.");
+        Resource.Get(SalesReceivablesSetup."Courier Resource No.");
         Message(ResponseContent);
     end;
 

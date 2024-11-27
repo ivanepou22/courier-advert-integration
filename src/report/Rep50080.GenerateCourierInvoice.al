@@ -13,7 +13,7 @@ report 50080 "Generate Courier Invoice"
             var
                 SalesHeader: Record "Sales Header";
             begin
-                SalesHeader.GenerateSalesInvoice(StartDate, EndDate, Section::invoice);
+                SalesHeader.GenerateSalesInvoice(StartDate, EndDate, Section::invoice, PostingDate);
             end;
 
             trigger OnPreDataItem()
@@ -24,6 +24,8 @@ report 50080 "Generate Courier Invoice"
                     Error('End Date is required');
                 if StartDate > EndDate then
                     Error('Start Date must be before End Date');
+                if PostingDate = 0D then
+                    Error('Posting Date is required');
             end;
         }
     }
@@ -58,4 +60,5 @@ report 50080 "Generate Courier Invoice"
         StartDate: Date;
         EndDate: Date;
         Section: Enum "Section Type";
+        PostingDate: Date;
 }
