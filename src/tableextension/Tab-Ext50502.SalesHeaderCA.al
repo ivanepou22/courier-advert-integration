@@ -28,6 +28,13 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         LastHttpIsBlockedByEnvironment: Boolean;
         RequestContent: Text;
         ResponseContent: Text;
+        CalcInvoiceDiscount: Boolean;
+        SalesCalcDiscount: Codeunit "Sales-Calc. Discount";
+        NoOfSalesInvErrors: Integer;
+        NoOfSalesInv: Integer;
+        SalesPost: Codeunit "Sales-Post";
+        PostInvoices: Boolean;
+        NextLineNo: Integer;
 
     procedure GenerateSalesInvoice(StartDate: Date; EndDate: Date; SectionType: Enum "Section Type"; PostingDate: Date)
     var
@@ -102,13 +109,22 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         SalesHeader: Record "Sales Header";
         SalesLine: Record "Sales Line";
     begin
+        Message(ResponseContent);
         SalesReceivablesSetup.Get();
         SalesReceivablesSetup.TestField("Courier Customer No.");
         SalesReceivablesSetup.TestField("Courier Resource No.");
 
         Customer.Get(SalesReceivablesSetup."Courier Customer No.");
         Resource.Get(SalesReceivablesSetup."Courier Resource No.");
-        Message(ResponseContent);
+
+        IF Customer.Blocked IN [Customer.Blocked::All, Customer.Blocked::Invoice] THEN begin
+            NoOfSalesInvErrors := NoOfSalesInvErrors + 1;
+        end
+        else begin
+            IF SalesHeader."No." <> '' THEN
+                FinalizeSalesOrderHeader;
+            InsertSalesOrderHeader(PostingDate);
+        end;
     end;
 
     local procedure GenerateToken(Username: Text; Password: Text; authUrl: Text): Text
@@ -220,6 +236,61 @@ var Response: JsonToken
     procedure GetLastIsBlockedByEnvironment(): Boolean
     begin
         exit(LastHttpIsBlockedByEnvironment)
+    end;
+
+    local procedure FinalizeSalesOrderHeader();
+    var
+        SalesSetup: Record "Sales & Receivables Setup";
+    begin
+        SalesSetup.GET;
+        CalcInvoiceDiscount := SalesSetup."Calc. Inv. Discount";
+        WITH SalesHeader DO BEGIN
+            IF CalcInvoiceDiscount THEN
+                SalesCalcDiscount.RUN(SalesLine);
+            GET("Document Type", "No.");
+            COMMIT;
+            CLEAR(SalesCalcDiscount);
+            CLEAR(SalesPost);
+            NoOfSalesInv := NoOfSalesInv + 1;
+            IF PostInvoices THEN BEGIN
+                CLEAR(SalesPost);
+                IF NOT SalesPost.RUN(SalesHeader) THEN
+                    NoOfSalesInvErrors := NoOfSalesInvErrors + 1;
+            END;
+        END;
+    end;
+
+    local procedure InsertSalesOrderHeader(PostingDate: Date);
+    var
+        lvCustomer: Record Customer;
+        SalesReceivablesSetup: Record "Sales & Receivables Setup";
+    begin
+        SalesReceivablesSetup.Get();
+        SalesReceivablesSetup.TestField("Courier Customer No.");
+        SalesReceivablesSetup.TestField("Courier Resource No.");
+
+        WITH SalesHeader DO BEGIN
+            INIT;
+            "Document Type" := "Document Type"::Order;
+            "Order Type" := "Order Type"::Newspaper;
+            "No." := '';
+            INSERT(TRUE);
+            VALIDATE("Sell-to Customer No.", SalesReceivablesSetup."Courier Customer No.");
+
+            IF "Bill-to Customer No." <> "Sell-to Customer No." THEN
+                VALIDATE("Bill-to Customer No.", SalesReceivablesSetup."Courier Customer No.");
+            VALIDATE("Posting Date", PostingDate);
+            VALIDATE("Document Date", PostingDate);
+            VALIDATE("Shipment Date", PostingDate);
+            VALIDATE("Courier Or Advert", TRUE);
+            Validate("Location Code", 'HQ');
+            VALIDATE("Posting Description", 'Courier invoice for ' + FORMAT(PostingDate));
+            lvCustomer.GET(SalesReceivablesSetup."Courier Customer No.");
+            VALIDATE("Currency Code", lvCustomer."Currency Code");
+            MODIFY;
+            COMMIT;
+            NextLineNo := 10000;
+        END;
     end;
 
     // procedure GetStatement(requestId: Text; transactionType: Option " ",astm; fromDate: Date; toDate: Date; accountId: Text)
