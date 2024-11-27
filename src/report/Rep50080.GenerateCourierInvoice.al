@@ -38,6 +38,12 @@ report 50080 "Generate Courier Invoice"
             {
                 group(GroupName)
                 {
+                    field(PostingDate; PostingDate)
+                    {
+                        ApplicationArea = All;
+                        Caption = 'Posting Date';
+                    }
+
                     field(Section; Section)
                     {
                         ApplicationArea = All;

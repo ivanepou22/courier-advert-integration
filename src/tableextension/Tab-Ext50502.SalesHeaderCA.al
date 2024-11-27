@@ -35,11 +35,10 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         SalesPost: Codeunit "Sales-Post";
         PostInvoices: Boolean;
         NextLineNo: Integer;
+        SalesHeaderOrder: Record "Sales Header";
 
     procedure GenerateSalesInvoice(StartDate: Date; EndDate: Date; SectionType: Enum "Section Type"; PostingDate: Date)
     var
-        SalesHeader: Record "Sales Header";
-        SalesLines: Record "Sales Line";
         SalesReceivablesSetup: Record "Sales & Receivables Setup";
         GeneralLedgerSetup: Record "General Ledger Setup";
         AuthTokenSecret: Text;
@@ -98,18 +97,17 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
     procedure createSalesInvoice(ResponseContent: Text; PostingDate: Date)
     var
         ResponseObject: JsonObject;
-        InsideResObject: JsonObject;
-        ResJsonToken: JsonToken;
-        InsideResJsonToken: JsonToken;
-        InputResJsonToken: JsonToken;
         ResponseArray: JsonArray;
         SalesReceivablesSetup: Record "Sales & Receivables Setup";
         Customer: Record Customer;
         Resource: Record Resource;
-        SalesHeader: Record "Sales Header";
         SalesLine: Record "Sales Line";
+        Success: Boolean;
+        SuccessText: Text;
+        SuccessToken: JsonToken;
+        ResponseToken: JsonToken;
+        ResponseArrayText: Text;
     begin
-        Message(ResponseContent);
         SalesReceivablesSetup.Get();
         SalesReceivablesSetup.TestField("Courier Customer No.");
         SalesReceivablesSetup.TestField("Courier Resource No.");
@@ -121,9 +119,172 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
             NoOfSalesInvErrors := NoOfSalesInvErrors + 1;
         end
         else begin
-            IF SalesHeader."No." <> '' THEN
-                FinalizeSalesOrderHeader;
-            InsertSalesOrderHeader(PostingDate);
+            if ResponseContent <> '' then begin
+                ResponseObject.ReadFrom(ResponseContent);
+                ResponseObject.SelectToken('success', SuccessToken);
+                SuccessText := SuccessToken.AsValue().AsText();
+                if SuccessText = '1' then
+                    Success := true;
+                if Success then begin
+                    ResponseObject.SelectToken('details', ResponseToken);
+                    if ResponseToken.IsArray then begin
+                        ResponseToken.WriteTo(ResponseArrayText);
+                        ResponseArray.ReadFrom(ResponseArrayText);
+                        if ResponseArray.Count <> 0 then begin
+                            IF SalesHeaderOrder."No." <> '' THEN
+                                FinalizeSalesOrderHeader;
+                            InsertSalesOrderHeader(PostingDate);
+                            CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.");
+                        end;
+                    end
+                end;
+            end;
+        end;
+    end;
+
+    procedure CreateSalesOrderLines(ResponseContent: Text; PostingDate: Date; salesOrderNo: Code[20])
+    var
+        SalesLine: Record "Sales Line";
+        LineNo: Integer;
+        ResponseObject: JsonObject;
+        ResponseArray: JsonArray;
+        Success: Boolean;
+        SuccessText: Text;
+        ResponseToken: JsonToken;
+        SuccessToken: JsonToken;
+        ResponseArrayText: Text;
+        i: Integer;
+        SalesLine1: Record "Sales Line";
+        SalesLine2: Record "Sales Line";
+        PodRef: Text;
+        DetailObjectText: Text;
+        DetailObject: JsonObject;
+        DetailObjectToken: JsonToken;
+        SalesSetup: Record "Sales & Receivables Setup";
+        CurrencyExchRate: Record "Currency Exchange Rate";
+        SalesLineNumber: Integer;
+    begin
+        LineNo := 1100;
+        Success := false;
+        SalesLineNumber := 0;
+        if ResponseContent <> '' then begin
+            SalesSetup.Get();
+            SalesSetup.TestField("Courier Resource No.");
+            ResponseObject.ReadFrom(ResponseContent);
+            ResponseObject.SelectToken('success', SuccessToken);
+            SuccessText := SuccessToken.AsValue().AsText();
+            if SuccessText = '1' then
+                Success := true;
+
+            if Success then begin
+                ResponseObject.SelectToken('details', ResponseToken);
+                if ResponseToken.IsArray then begin
+                    ResponseToken.WriteTo(ResponseArrayText);
+                    ResponseArray.ReadFrom(ResponseArrayText);
+                    for i := 0 to ResponseArray.Count - 1 do begin
+                        ResponseArray.Get(i, ResponseToken);
+                        if ResponseToken.IsObject then begin
+                            ResponseToken.WriteTo(DetailObjectText);
+                            DetailObject.ReadFrom(DetailObjectText);
+                            DetailObject.SelectToken('pod_ref', ResponseToken);
+                            PodRef := ResponseToken.AsValue().AsText();
+                            SalesLine1.Reset();
+                            SalesLine1.SetRange("Document Type", "Document Type"::Order);
+                            SalesLine1.SetRange(pod_ref, PodRef);
+                            if not SalesLine1.FindFirst() then begin
+                                SalesLine2.Reset();
+                                SalesLine2.SetRange("Document Type", "Document Type"::Order);
+                                SalesLine2.SetRange("Document No.", salesOrderNo);
+                                SalesLine2.SetRange(pod_ref, PodRef);
+                                if SalesLine2.FindLast() then begin
+                                    LineNo += 1;
+                                end;
+
+                                SalesLine.Init();
+                                SalesLine.Type := SalesLine.Type::Resource;
+                                SalesLine."Document Type" := "Document Type"::Order;
+                                SalesLine."Document No." := salesOrderNo;
+                                SalesLine."Line No." := LineNo;
+                                SalesLine."No." := SalesSetup."Courier Resource No.";
+                                SalesLine.Validate("No.");
+
+                                SalesLine.Validate(Quantity, 1);
+
+                                DetailObject.SelectToken('total_delivery_fees', DetailObjectToken);
+                                SalesLine.Validate("Unit Price", DetailObjectToken.AsValue().AsDecimal());
+                                Message(Format(SalesLine."Unit Price"));
+                                IF SalesHeader."Currency Code" <> '' THEN BEGIN
+                                    SalesHeader.TESTFIELD("Currency Factor");
+                                    SalesLine."Unit Price" :=
+                                      ROUND(
+                                        CurrencyExchRate.ExchangeAmtLCYToFCY(
+                                        PostingDate, SalesHeader."Currency Code",
+                                        SalesLine."Unit Price", SalesHeader."Currency Factor"));
+                                END;
+                                SalesLine.VALIDATE("Dimension Set ID", SalesHeader."Dimension Set ID");
+                                DetailObject.SelectToken('pod_ref', DetailObjectToken);
+                                SalesLine.pod_ref := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('billing_model', DetailObjectToken);
+                                SalesLine.billing_model := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('fragile', DetailObjectToken);
+                                if DetailObjectToken.AsValue().AsText() = '1' then
+                                    SalesLine.fragile := true
+                                else
+                                    SalesLine.fragile := false;
+                                DetailObject.SelectToken('fragile_surcharge', DetailObjectToken);
+                                SalesLine.fragile_surcharge := DetailObjectToken.AsValue().AsDecimal();
+                                DetailObject.SelectToken('delivery_fee', DetailObjectToken);
+                                SalesLine.delivery_fee := DetailObjectToken.AsValue().AsDecimal();
+                                DetailObject.SelectToken('vat_fee', DetailObjectToken);
+                                SalesLine.vat_fee := DetailObjectToken.AsValue().AsDecimal();
+                                DetailObject.SelectToken('ucc_fee', DetailObjectToken);
+                                SalesLine.ucc_fee := DetailObjectToken.AsValue().AsDecimal();
+                                DetailObject.SelectToken('total_delivery_fees', DetailObjectToken);
+                                SalesLine.total_delivery_fees := DetailObjectToken.AsValue().AsDecimal();
+                                DetailObject.SelectToken('pay_mode', DetailObjectToken);
+                                SalesLine.pay_mode := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('txn_reference', DetailObjectToken);
+                                SalesLine.txn_reference := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('pod_date', DetailObjectToken);
+                                SalesLine.pod_date := DetailObjectToken.AsValue().AsDate();
+                                DetailObject.SelectToken('sender_name', DetailObjectToken);
+                                SalesLine.sender_name := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('sender_tel', DetailObjectToken);
+                                SalesLine.sender_tel := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('sender_address', DetailObjectToken);
+                                SalesLine.sender_address := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('receiver_name', DetailObjectToken);
+                                SalesLine.receiver_name := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('receiver_tel', DetailObjectToken);
+                                SalesLine.receiver_tel := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('receiver_address', DetailObjectToken);
+                                SalesLine.receiver_address := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('receiver_town', DetailObjectToken);
+                                SalesLine.receiver_town := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('receiver_district', DetailObjectToken);
+                                SalesLine.receiver_district := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('receiver_region', DetailObjectToken);
+                                SalesLine.receiver_region := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('no_of_pieces', DetailObjectToken);
+                                SalesLine.no_of_pieces := DetailObjectToken.AsValue().AsInteger();
+                                DetailObject.SelectToken('package_weight', DetailObjectToken);
+                                SalesLine.package_weight := DetailObjectToken.AsValue().AsDecimal();
+                                DetailObject.SelectToken('package_description', DetailObjectToken);
+                                SalesLine.package_description := DetailObjectToken.AsValue().AsText();
+                                DetailObject.SelectToken('package_type', DetailObjectToken);
+                                SalesLine.package_type := DetailObjectToken.AsValue().AsText();
+                                SalesLine.Insert();
+                                LineNo += 1;
+                                SalesLineNumber += 1;
+                            end;
+                        end;
+                    end;
+                    if salesOrderNo <> '' then begin
+                        Message('Sales Order: %1 has been created and %2 Line(s) were(was) created', salesOrderNo, SalesLineNumber);
+                    end
+                end;
+            end else
+                Error('Resquest was not successful please try again');
         end;
     end;
 
@@ -244,7 +405,7 @@ var Response: JsonToken
     begin
         SalesSetup.GET;
         CalcInvoiceDiscount := SalesSetup."Calc. Inv. Discount";
-        WITH SalesHeader DO BEGIN
+        WITH SalesHeaderOrder DO BEGIN
             IF CalcInvoiceDiscount THEN
                 SalesCalcDiscount.RUN(SalesLine);
             GET("Document Type", "No.");
@@ -254,7 +415,7 @@ var Response: JsonToken
             NoOfSalesInv := NoOfSalesInv + 1;
             IF PostInvoices THEN BEGIN
                 CLEAR(SalesPost);
-                IF NOT SalesPost.RUN(SalesHeader) THEN
+                IF NOT SalesPost.RUN(SalesHeaderOrder) THEN
                     NoOfSalesInvErrors := NoOfSalesInvErrors + 1;
             END;
         END;
@@ -269,7 +430,7 @@ var Response: JsonToken
         SalesReceivablesSetup.TestField("Courier Customer No.");
         SalesReceivablesSetup.TestField("Courier Resource No.");
 
-        WITH SalesHeader DO BEGIN
+        WITH SalesHeaderOrder DO BEGIN
             INIT;
             "Document Type" := "Document Type"::Order;
             "Order Type" := "Order Type"::Newspaper;
@@ -282,6 +443,7 @@ var Response: JsonToken
             VALIDATE("Posting Date", PostingDate);
             VALIDATE("Document Date", PostingDate);
             VALIDATE("Shipment Date", PostingDate);
+            VALIDATE("Order Date", PostingDate);
             VALIDATE("Courier Or Advert", TRUE);
             Validate("Location Code", 'HQ');
             VALIDATE("Posting Description", 'Courier invoice for ' + FORMAT(PostingDate));
@@ -292,196 +454,4 @@ var Response: JsonToken
             NextLineNo := 10000;
         END;
     end;
-
-    // procedure GetStatement(requestId: Text; transactionType: Option " ",astm; fromDate: Date; toDate: Date; accountId: Text)
-    // var
-    //     XCountryCode: Text;
-    //     XChannelId: Text;
-    //     XSignature: Text;
-    //     ServerUrl: Text;
-    //     Request: HttpRequestMessage;
-    //     Response: HttpResponseMessage;
-    //     XIBMClientId: Text;
-    //     XIBMClientSecret: Text;
-    //     AccessToken: Text;
-    //     TempBlob: Codeunit "Temp Blob";
-    //     ResponseInstream: InStream;
-    //     RequestJson: JsonToken;
-    //     ResponseJson: JsonToken;
-    //     Success: Boolean;
-    //     TempFile: File;
-    //     NewStream: InsTream;
-    //     ToFileName: Variant;
-    //     RequestBody: JsonObject;
-    //     BanKIntegrationSetup: Record "Bank Integration Setup";
-    //     FromDateText: Text;
-    //     ToDateText: Text;
-    //     Password: Text;
-    // begin
-    //     BanKIntegrationSetup.Get();
-    //     BanKIntegrationSetup.TestField(XIBMClientId);
-    //     BanKIntegrationSetup.TestField(XIBMClientSecret);
-    //     BanKIntegrationSetup.TestField(StatementServerUrl);
-    //     BanKIntegrationSetup.TestField(XCountryCode);
-    //     BanKIntegrationSetup.TestField(XChannelId);
-
-    //     AccessToken := GetToken();
-    //     HttpMethod := HttpMethod::POST;
-    //     XIBMClientId := BanKIntegrationSetup.XIBMClientId;
-    //     XIBMClientSecret := BanKIntegrationSetup.XIBMClientSecret;
-    //     ServerUrl := BanKIntegrationSetup.StatementServerUrl;
-    //     XCountryCode := BanKIntegrationSetup.XCountryCode;
-    //     XChannelId := BanKIntegrationSetup.XChannelId;
-
-    //     FromDateText := CopyStr(Format(fromDate), 4, 2) + '/' + CopyStr(Format(fromDate), 1, 2) + '/20' + CopyStr(Format(fromDate), 7, 2);
-    //     ToDateText := CopyStr(Format(toDate), 4, 2) + '/' + CopyStr(Format(toDate), 1, 2) + '/20' + CopyStr(Format(toDate), 7, 2);
-
-    //     RequestBody.Add('requestId', requestId);
-    //     RequestBody.Add('transactionType', Format(transactionType));
-    //     RequestBody.Add('fromDate', FromDateText);
-    //     RequestBody.Add('toDate', ToDateText);
-    //     RequestBody.Add('accountId', accountId);
-
-    //     XSignature := GenerateSignature(RequestBody);
-
-    //     RequestBody.WriteTo(RequestContent);
-    //     if RequestContent <> '' then RequestJson.ReadFrom(RequestContent);
-    //     if HttpHandler.RequestJson(ServerUrl, HttpMethod, XIBMClientId, XIBMClientSecret, AccessToken, XCountryCode, XChannelId, XSignature, Password, RequestJson, ResponseJson) then begin
-    //         if HttpHandler.IsLastHttpSuccess() then begin
-    //             ResponseJson.WriteTo(ResponseContent);
-    //             createStatementLines(ResponseContent);
-    //         end
-    //         else begin
-    //             Error(StrSubstNo('Http Request Failed - %1: %2', HttpHandler.GetLastHttpStatusCode(), HttpHandler.GetLastHttpReasonPhrase()));
-    //         end;
-    //     end
-    //     else begin
-    //         Error(GetLastErrorText());
-    //     end;
-    // end;
-
-    /// <summary>
-    /// createStatementLines.
-    /// </summary>
-    /// <param name="ResponseContent">Text.</param>
-    // procedure createStatementLines(ResponseContent: Text)
-    // var
-    //     ResponseObject: JsonObject;
-    //     InsideResObject: JsonObject;
-    //     ResJsonToken: JsonToken;
-    //     InsideResJsonToken: JsonToken;
-    //     InputResJsonToken: JsonToken;
-    //     InsideResJsonText: Text;
-    //     ResponseArray: JsonArray;
-    //     ResponseArrayText: Text;
-    //     StanbicStatement: Record "Stanbic Bank Statement";
-    //     StanbicStatement1: Record "Stanbic Bank Statement";
-    //     StanbicStatement2: Record "Stanbic Bank Statement";
-    //     requestId: Text;
-    //     accountId: Text;
-    //     transactionType: Text;
-    //     numberOfTransactions: Integer;
-    //     accountStatus: Text;
-    //     accountName: Text;
-    //     accountType: Text;
-    //     accountCurrency: Text;
-    //     mobile: Text;
-    //     statusCode: Text;
-    //     statusDescription: Text;
-    //     i: Integer;
-    //     TransactID: Text;
-    //     debitCreditType: Text[10];
-    //     EntryNo: Integer;
-    //     HttpHandler: Codeunit "MSLHttp HttpHandler";
-    //     track: Integer;
-    //     TransBalance: Decimal;
-    // begin
-    //     EntryNo := 100;
-    //     if ResponseContent <> '' then begin
-    //         ResponseObject.ReadFrom(ResponseContent);
-    //         ResponseObject.Get('requestId', ResJsonToken);
-    //         requestId := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('accountId', ResJsonToken);
-    //         accountId := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('transactionType', ResJsonToken);
-    //         transactionType := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('numberOfTransactions', ResJsonToken);
-    //         numberOfTransactions := ResJsonToken.AsValue().AsInteger();
-    //         ResponseObject.Get('accountStatus', ResJsonToken);
-    //         accountStatus := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('accountName', ResJsonToken);
-    //         accountName := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('accountType', ResJsonToken);
-    //         accountType := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('accountCurrency', ResJsonToken);
-    //         accountCurrency := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('mobile', ResJsonToken);
-    //         mobile := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('statusCode', ResJsonToken);
-    //         statusCode := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('statusDescription', ResJsonToken);
-    //         statusDescription := ResJsonToken.AsValue().AsText();
-    //         ResponseObject.Get('transactionHistory', ResJsonToken);
-    //         if ResJsonToken.IsArray then begin
-    //             ResJsonToken.WriteTo(ResponseArrayText);
-    //             ResponseArray.ReadFrom(ResponseArrayText);
-
-    //             for i := 0 To ResponseArray.Count - 1 do begin
-    //                 TransBalance := 0;
-    //                 StanbicStatement1.Reset();
-    //                 StanbicStatement1.SetFilter("Entry No.", '<>%1', 0);
-    //                 if StanbicStatement1.FindLast() then
-    //                     EntryNo += StanbicStatement1."Entry No.";
-
-    //                 ResponseArray.Get(i, InsideResJsonToken);
-    //                 if InsideResJsonToken.IsObject then begin
-    //                     InsideResJsonToken.WriteTo(InsideResJsonText);
-    //                     InsideResObject.ReadFrom(InsideResJsonText);
-    //                     InsideResObject.Get('transactionId', InputResJsonToken);
-    //                     TransactID := InputResJsonToken.AsValue().AsText();
-    //                     InsideResObject.Get('transactionBalance', InputResJsonToken);
-    //                     TransBalance := HttpHandler.ConvertToDecimal(InputResJsonToken.AsValue().AsText());
-    //                     StanbicStatement2.Reset();
-    //                     StanbicStatement2.SetRange(TransactionId, TransactID);
-    //                     StanbicStatement2.SetRange(transactionBalance, TransBalance);
-    //                     if not StanbicStatement2.FindFirst() then begin
-    //                         track += 1;
-    //                         StanbicStatement.Init();
-    //                         StanbicStatement."Entry No." := EntryNo;
-    //                         StanbicStatement.requestId := requestId;
-    //                         StanbicStatement.accountId := accountId;
-    //                         StanbicStatement.transactionType := transactionType;
-    //                         StanbicStatement.numberOfTransactions := numberOfTransactions;
-    //                         StanbicStatement.accountStatus := accountStatus;
-    //                         StanbicStatement.accountName := accountName;
-    //                         StanbicStatement.accountType := accountType;
-    //                         StanbicStatement.accountCurrency := accountCurrency;
-    //                         StanbicStatement.mobile := mobile;
-    //                         StanbicStatement.statusCode := statusCode;
-    //                         StanbicStatement.statusDescription := statusDescription;
-    //                         StanbicStatement.TransactionId := TransactID;
-    //                         InsideResObject.Get('debitCreditType', InputResJsonToken);
-    //                         if (InputResJsonToken.AsValue().AsText() = 'C') or (InputResJsonToken.AsValue().AsText() = 'c') then
-    //                             StanbicStatement.debitCreditType := StanbicStatement.debitCreditType::Credit
-    //                         else
-    //                             if (InputResJsonToken.AsValue().AsText() = 'D') or (InputResJsonToken.AsValue().AsText() = 'd') then
-    //                                 StanbicStatement.debitCreditType := StanbicStatement.debitCreditType::Debit;
-    //                         InsideResObject.Get('transactionDate', InputResJsonToken);
-    //                         StanbicStatement.transactionDate := HttpHandler.ConvertDate(InputResJsonToken.AsValue().AsText());
-    //                         InsideResObject.Get('transactionRemark', InputResJsonToken);
-    //                         StanbicStatement.transactionRemark := InputResJsonToken.AsValue().AsText();
-    //                         InsideResObject.Get('transactionCurrency', InputResJsonToken);
-    //                         StanbicStatement.transactionCurrency := InputResJsonToken.AsValue().AsText();
-    //                         InsideResObject.Get('transactionAmount', InputResJsonToken);
-    //                         StanbicStatement.transactionAmount := HttpHandler.ConvertToDecimal(InputResJsonToken.AsValue().AsText());
-    //                         InsideResObject.Get('transactionBalance', InputResJsonToken);
-    //                         StanbicStatement.transactionBalance := HttpHandler.ConvertToDecimal(InputResJsonToken.AsValue().AsText());
-    //                         StanbicStatement.Insert();
-    //                     end;
-    //                 end;
-    //             end;
-    //             Message('%1 Transactions have been generated and %2 Transactions have been created.', numberOfTransactions, track);
-    //         end;
-    //     end;
-    // end;
 }
