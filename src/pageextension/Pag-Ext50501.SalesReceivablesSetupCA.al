@@ -13,6 +13,11 @@ pageextension 50501 "Sales & Receivables Setup CA" extends "Sales & Receivables 
                     ApplicationArea = All;
                     ToolTip = 'Specifies the value of the Courier Transaction Url field.';
                 }
+                field("Courier Transaction Update Url"; Rec."Courier Transaction Update Url")
+                {
+                    ApplicationArea = All;
+                    ToolTip = 'Specifies the value of the Courier Transaction Update Url field.';
+                }
                 field("Courier Customer No."; Rec."Courier Customer No.")
                 {
                     ApplicationArea = All;

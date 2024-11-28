@@ -15,6 +15,10 @@ tableextension 50500 "Sales & Receivables Setup CA" extends "Sales & Receivables
         {
             TableRelation = Resource."No.";
         }
+        field(50503; "Courier Transaction Update Url"; Text[1000])
+        {
+            DataClassification = ToBeClassified;
+        }
     }
 
     keys
