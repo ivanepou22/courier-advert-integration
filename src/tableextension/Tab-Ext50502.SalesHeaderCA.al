@@ -82,7 +82,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
             if RequestJson(ServerUrl, HttpMethod, '', '', RequestJson, ResponseJson) then begin
                 if IsLastHttpSuccess() then begin
                     ResponseJson.WriteTo(ResponseContent);
-                    createSalesInvoice(ResponseContent, PostingDate);
+                    createSalesInvoice(ResponseContent, PostingDate, StartDate, EndDate);
                 end
                 else begin
                     Error(StrSubstNo('Http Request Failed - %1: %2', GetLastHttpStatusCode(), GetLastHttpReasonPhrase()));
@@ -94,7 +94,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         end;
     end;
 
-    procedure createSalesInvoice(ResponseContent: Text; PostingDate: Date)
+    procedure createSalesInvoice(ResponseContent: Text; PostingDate: Date; StartDate: Date; EndDate: Date)
     var
         ResponseObject: JsonObject;
         ResponseArray: JsonArray;
@@ -135,7 +135,9 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                                 FinalizeSalesOrderHeader;
                             InsertSalesOrderHeader(PostingDate);
                             CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.");
-                        end;
+                        end else begin
+                            Message('No Transactions were found for the specified date range: [%1] - [%2]', StartDate, EndDate);
+                        end
                     end
                 end;
             end;
@@ -190,11 +192,11 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                             DetailObject.SelectToken('pod_ref', ResponseToken);
                             PodRef := ResponseToken.AsValue().AsText();
                             SalesLine1.Reset();
-                            SalesLine1.SetRange("Document Type", "Document Type"::Order);
+                            SalesLine1.SetRange("Document Type", SalesHeader."Document Type");
                             SalesLine1.SetRange(pod_ref, PodRef);
                             if not SalesLine1.FindFirst() then begin
                                 SalesLine2.Reset();
-                                SalesLine2.SetRange("Document Type", "Document Type"::Order);
+                                SalesLine2.SetRange("Document Type", SalesHeader."Document Type");
                                 SalesLine2.SetRange("Document No.", salesOrderNo);
                                 SalesLine2.SetRange(pod_ref, PodRef);
                                 if SalesLine2.FindLast() then begin
@@ -203,7 +205,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
 
                                 SalesLine.Init();
                                 SalesLine.Type := SalesLine.Type::Resource;
-                                SalesLine."Document Type" := "Document Type"::Order;
+                                SalesLine."Document Type" := SalesHeader."Document Type";
                                 SalesLine."Document No." := salesOrderNo;
                                 SalesLine."Line No." := LineNo;
                                 SalesLine."No." := SalesSetup."Courier Resource No.";
@@ -307,7 +309,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         SalesReceivablesSetup.Get();
         GeneralLedgerSetup.Get();
 
-        SalesReceivablesSetup.TestField("Courier Transaction Url");
+        SalesReceivablesSetup.TestField("Courier Transaction Update Url");
         GeneralLedgerSetup.TestField("Courier Username");
         GeneralLedgerSetup.TestField("Courier Password");
 
@@ -323,13 +325,12 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
             BodyJson.Add('object', ObjectJson);
 
             BodyJson.WriteTo(RequestContent);
-            ServerUrl := SalesReceivablesSetup."Courier Transaction Url";
+            ServerUrl := SalesReceivablesSetup."Courier Transaction Update Url";
             HttpMethod := Enum::"Http Method"::POST;
             if RequestContent <> '' then RequestJson.ReadFrom(RequestContent);
             if RequestJson(ServerUrl, HttpMethod, GeneralLedgerSetup."Courier Username", GeneralLedgerSetup."Courier Password", RequestJson, ResponseJson) then begin
                 if IsLastHttpSuccess() then begin
                     ResponseJson.WriteTo(ResponseContent);
-                    Message('Transaction %1 was updated', TransactionNo);
                 end
                 else begin
                     Error(StrSubstNo('Http Request Failed - %1: %2', GetLastHttpStatusCode(), GetLastHttpReasonPhrase()));
