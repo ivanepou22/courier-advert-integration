@@ -13,7 +13,7 @@ report 50080 "Generate Courier Invoice"
             var
                 SalesHeader: Record "Sales Header";
             begin
-                SalesHeader.GenerateSalesInvoice(StartDate, EndDate, Section::invoice, PostingDate);
+                SalesHeader.GenerateSalesInvoice(StartDate, EndDate, Section::invoice, PostingDate, DocumentType);
             end;
 
             trigger OnPreDataItem()

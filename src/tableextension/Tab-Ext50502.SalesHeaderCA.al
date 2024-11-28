@@ -37,7 +37,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         NextLineNo: Integer;
         SalesHeaderOrder: Record "Sales Header";
 
-    procedure GenerateSalesInvoice(StartDate: Date; EndDate: Date; SectionType: Enum "Section Type"; PostingDate: Date)
+    procedure GenerateSalesInvoice(StartDate: Date; EndDate: Date; SectionType: Enum "Section Type"; PostingDate: Date; DocumentType: Enum "Sales Document Type")
     var
         SalesReceivablesSetup: Record "Sales & Receivables Setup";
         GeneralLedgerSetup: Record "General Ledger Setup";
@@ -82,7 +82,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
             if RequestJson(ServerUrl, HttpMethod, '', '', RequestJson, ResponseJson) then begin
                 if IsLastHttpSuccess() then begin
                     ResponseJson.WriteTo(ResponseContent);
-                    createSalesInvoice(ResponseContent, PostingDate, StartDate, EndDate);
+                    createSalesInvoice(ResponseContent, PostingDate, StartDate, EndDate, DocumentType);
                 end
                 else begin
                     Error(StrSubstNo('Http Request Failed - %1: %2', GetLastHttpStatusCode(), GetLastHttpReasonPhrase()));
@@ -94,7 +94,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         end;
     end;
 
-    procedure createSalesInvoice(ResponseContent: Text; PostingDate: Date; StartDate: Date; EndDate: Date)
+    procedure createSalesInvoice(ResponseContent: Text; PostingDate: Date; StartDate: Date; EndDate: Date; DocumentType: Enum "Sales Document Type")
     var
         ResponseObject: JsonObject;
         ResponseArray: JsonArray;
@@ -133,8 +133,8 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                         if ResponseArray.Count <> 0 then begin
                             IF SalesHeaderOrder."No." <> '' THEN
                                 FinalizeSalesOrderHeader;
-                            InsertSalesOrderHeader(PostingDate);
-                            CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.");
+                            InsertSalesOrderHeader(PostingDate, DocumentType);
+                            CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.", DocumentType);
                         end else begin
                             Message('No Transactions were found for the specified date range: [%1] - [%2]', StartDate, EndDate);
                         end
@@ -144,7 +144,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         end;
     end;
 
-    procedure CreateSalesOrderLines(ResponseContent: Text; PostingDate: Date; salesOrderNo: Code[20])
+    procedure CreateSalesOrderLines(ResponseContent: Text; PostingDate: Date; salesOrderNo: Code[20]; DocumentType: Enum "Sales Document Type")
     var
         SalesLine: Record "Sales Line";
         LineNo: Integer;
@@ -192,11 +192,11 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                             DetailObject.SelectToken('pod_ref', ResponseToken);
                             PodRef := ResponseToken.AsValue().AsText();
                             SalesLine1.Reset();
-                            SalesLine1.SetRange("Document Type", "Document Type"::Order);
+                            SalesLine1.SetRange("Document Type", DocumentType);
                             SalesLine1.SetRange(pod_ref, PodRef);
                             if not SalesLine1.FindFirst() then begin
                                 SalesLine2.Reset();
-                                SalesLine2.SetRange("Document Type", "Document Type"::Order);
+                                SalesLine2.SetRange("Document Type", DocumentType);
                                 SalesLine2.SetRange("Document No.", salesOrderNo);
                                 SalesLine2.SetRange(pod_ref, PodRef);
                                 if SalesLine2.FindLast() then begin
@@ -205,7 +205,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
 
                                 SalesLine.Init();
                                 SalesLine.Type := SalesLine.Type::Resource;
-                                SalesLine."Document Type" := "Document Type"::Order;
+                                SalesLine."Document Type" := DocumentType;
                                 SalesLine."Document No." := salesOrderNo;
                                 SalesLine."Line No." := LineNo;
                                 SalesLine."No." := SalesSetup."Courier Resource No.";
@@ -475,7 +475,7 @@ var Response: JsonToken
         END;
     end;
 
-    local procedure InsertSalesOrderHeader(PostingDate: Date);
+    local procedure InsertSalesOrderHeader(PostingDate: Date; DocumentType: Enum "Sales Document Type");
     var
         lvCustomer: Record Customer;
         SalesReceivablesSetup: Record "Sales & Receivables Setup";
@@ -486,8 +486,8 @@ var Response: JsonToken
 
         WITH SalesHeaderOrder DO BEGIN
             INIT;
-            "Document Type" := "Document Type"::Order;
-            "Order Type" := "Order Type"::Newspaper;
+            "Document Type" := DocumentType;
+            // "Order Type" := "Order Type"::Newspaper;
             "No." := '';
             INSERT(TRUE);
             VALIDATE("Sell-to Customer No.", SalesReceivablesSetup."Courier Customer No.");
