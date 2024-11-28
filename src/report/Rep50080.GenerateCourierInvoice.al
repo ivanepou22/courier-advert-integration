@@ -26,6 +26,8 @@ report 50080 "Generate Courier Invoice"
                     Error('Start Date must be before End Date');
                 if PostingDate = 0D then
                     Error('Posting Date is required');
+                if not (DocumentType in [DocumentType::Invoice, DocumentType::Order]) then
+                    Error('Document Type must be either Invoice or Order');
             end;
         }
     }
@@ -38,15 +40,15 @@ report 50080 "Generate Courier Invoice"
             {
                 group(GroupName)
                 {
+                    field(DocumentType; DocumentType)
+                    {
+                        ApplicationArea = All;
+                        Caption = 'Document Type';
+                    }
                     field(PostingDate; PostingDate)
                     {
                         ApplicationArea = All;
                         Caption = 'Posting Date';
-                    }
-
-                    field(Section; Section)
-                    {
-                        ApplicationArea = All;
                     }
                     field(StartDate; StartDate)
                     {
@@ -67,4 +69,5 @@ report 50080 "Generate Courier Invoice"
         EndDate: Date;
         Section: Enum "Section Type";
         PostingDate: Date;
+        DocumentType: Enum "Sales Document Type";
 }
