@@ -13,7 +13,7 @@ pageextension 50506 "Sales Orders CA" extends "Sales Order List"
             action(GenerateCourierInvoice)
             {
                 ApplicationArea = All;
-                Caption = 'Generate Courier Invoice';
+                Caption = 'Generate Courier Sales Order';
                 Promoted = true;
                 PromotedCategory = Process;
                 PromotedIsBig = true;

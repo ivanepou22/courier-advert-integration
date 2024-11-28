@@ -192,11 +192,11 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                             DetailObject.SelectToken('pod_ref', ResponseToken);
                             PodRef := ResponseToken.AsValue().AsText();
                             SalesLine1.Reset();
-                            SalesLine1.SetRange("Document Type", SalesHeader."Document Type");
+                            SalesLine1.SetRange("Document Type", "Document Type"::Order);
                             SalesLine1.SetRange(pod_ref, PodRef);
                             if not SalesLine1.FindFirst() then begin
                                 SalesLine2.Reset();
-                                SalesLine2.SetRange("Document Type", SalesHeader."Document Type");
+                                SalesLine2.SetRange("Document Type", "Document Type"::Order);
                                 SalesLine2.SetRange("Document No.", salesOrderNo);
                                 SalesLine2.SetRange(pod_ref, PodRef);
                                 if SalesLine2.FindLast() then begin
@@ -205,7 +205,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
 
                                 SalesLine.Init();
                                 SalesLine.Type := SalesLine.Type::Resource;
-                                SalesLine."Document Type" := SalesHeader."Document Type";
+                                SalesLine."Document Type" := "Document Type"::Order;
                                 SalesLine."Document No." := salesOrderNo;
                                 SalesLine."Line No." := LineNo;
                                 SalesLine."No." := SalesSetup."Courier Resource No.";
