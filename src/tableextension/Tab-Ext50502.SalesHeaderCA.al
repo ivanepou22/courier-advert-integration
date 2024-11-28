@@ -163,6 +163,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         SalesSetup: Record "Sales & Receivables Setup";
         CurrencyExchRate: Record "Currency Exchange Rate";
         SalesLineNumber: Integer;
+        TransactionNo: Code[50];
     begin
         LineNo := 1100;
         Success := false;
@@ -212,7 +213,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
 
                                 DetailObject.SelectToken('total_delivery_fees', DetailObjectToken);
                                 SalesLine.Validate("Unit Price", DetailObjectToken.AsValue().AsDecimal());
-                                Message(Format(SalesLine."Unit Price"));
+
                                 IF SalesHeader."Currency Code" <> '' THEN BEGIN
                                     SalesHeader.TESTFIELD("Currency Factor");
                                     SalesLine."Unit Price" :=
@@ -224,6 +225,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                                 SalesLine.VALIDATE("Dimension Set ID", SalesHeader."Dimension Set ID");
                                 DetailObject.SelectToken('pod_ref', DetailObjectToken);
                                 SalesLine.pod_ref := DetailObjectToken.AsValue().AsText();
+                                TransactionNo := DetailObjectToken.AsValue().AsText();
                                 DetailObject.SelectToken('billing_model', DetailObjectToken);
                                 SalesLine.billing_model := DetailObjectToken.AsValue().AsText();
                                 DetailObject.SelectToken('fragile', DetailObjectToken);
@@ -285,6 +287,56 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                 end;
             end else
                 Error('Resquest was not successful please try again');
+        end;
+    end;
+
+    procedure UpdateTransaction(TransactionNo: Code[50]; SectionType: Enum "Section Type")
+    var
+        SalesReceivablesSetup: Record "Sales & Receivables Setup";
+        GeneralLedgerSetup: Record "General Ledger Setup";
+        AuthTokenSecret: Text;
+        ObjectJson: JsonObject;
+        BodyJson: JsonObject;
+        RequestJson: JsonToken;
+        ResponseJson: JsonToken;
+        ServerUrl: Text;
+        HttpMethod: Enum "Http Method";
+    begin
+        ServerUrl := '';
+        SalesReceivablesSetup.Get();
+        GeneralLedgerSetup.Get();
+
+        SalesReceivablesSetup.TestField("Courier Transaction Url");
+        GeneralLedgerSetup.TestField("Courier Username");
+        GeneralLedgerSetup.TestField("Courier Password");
+
+        // AuthTokenSecret := GenerateToken(GeneralLedgerSetup."Courier Username", GeneralLedgerSetup."Courier Password", '')
+
+        if SectionType = SectionType::invoice then begin
+            Clear(ObjectJson);
+            clear(BodyJson);
+
+            ObjectJson.Add('section', Format(SectionType));
+            ObjectJson.Add('awbno', TransactionNo);
+
+            BodyJson.Add('object', ObjectJson);
+
+            BodyJson.WriteTo(RequestContent);
+            ServerUrl := SalesReceivablesSetup."Courier Transaction Url";
+            HttpMethod := Enum::"Http Method"::POST;
+            if RequestContent <> '' then RequestJson.ReadFrom(RequestContent);
+            if RequestJson(ServerUrl, HttpMethod, GeneralLedgerSetup."Courier Username", GeneralLedgerSetup."Courier Password", RequestJson, ResponseJson) then begin
+                if IsLastHttpSuccess() then begin
+                    ResponseJson.WriteTo(ResponseContent);
+                    Message('Transaction %1 was updated', TransactionNo);
+                end
+                else begin
+                    Error(StrSubstNo('Http Request Failed - %1: %2', GetLastHttpStatusCode(), GetLastHttpReasonPhrase()));
+                end;
+            end
+            else begin
+                Error(GetLastErrorText());
+            end;
         end;
     end;
 
