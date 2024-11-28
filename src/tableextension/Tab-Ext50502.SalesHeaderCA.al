@@ -276,6 +276,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                                 DetailObject.SelectToken('package_type', DetailObjectToken);
                                 SalesLine.package_type := DetailObjectToken.AsValue().AsText();
                                 SalesLine.Insert();
+                                UpdateTransaction(TransactionNo, Enum::"Section Type"::invoice);
                                 LineNo += 1;
                                 SalesLineNumber += 1;
                             end;
