@@ -10,6 +10,11 @@ pageextension 50504 "Sales Order CA" extends "Sales Order"
                 ApplicationArea = All;
                 ToolTip = 'Specifies the value of the Courier Or Advert field.';
             }
+            field("Date Range Filter"; Rec."Date Range Filter")
+            {
+                ApplicationArea = All;
+                ToolTip = 'Specifies the value of the Date Range Filter field.';
+            }
         }
     }
 

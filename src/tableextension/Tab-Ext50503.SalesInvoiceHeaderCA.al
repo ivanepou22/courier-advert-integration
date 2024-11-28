@@ -7,6 +7,10 @@ tableextension 50503 "Sales Invoice Header CA" extends "Sales Invoice Header"
         {
             DataClassification = ToBeClassified;
         }
+        field(50501; "Date Range Filter"; Text[50])
+        {
+            DataClassification = ToBeClassified;
+        }
     }
 
     keys

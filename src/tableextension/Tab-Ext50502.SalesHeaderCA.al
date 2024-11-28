@@ -7,6 +7,10 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         {
             DataClassification = ToBeClassified;
         }
+        field(50501; "Date Range Filter"; Text[50])
+        {
+            DataClassification = ToBeClassified;
+        }
     }
 
     keys
@@ -133,7 +137,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                         if ResponseArray.Count <> 0 then begin
                             IF SalesHeaderOrder."No." <> '' THEN
                                 FinalizeSalesOrderHeader;
-                            InsertSalesOrderHeader(PostingDate, DocumentType);
+                            InsertSalesOrderHeader(PostingDate, DocumentType, StartDate, EndDate);
                             CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.", DocumentType);
                         end else begin
                             Message('No Transactions were found for the specified date range: [%1] - [%2]', StartDate, EndDate);
@@ -475,7 +479,7 @@ var Response: JsonToken
         END;
     end;
 
-    local procedure InsertSalesOrderHeader(PostingDate: Date; DocumentType: Enum "Sales Document Type");
+    local procedure InsertSalesOrderHeader(PostingDate: Date; DocumentType: Enum "Sales Document Type"; StartDate: Date; EndDate: Date);
     var
         lvCustomer: Record Customer;
         SalesReceivablesSetup: Record "Sales & Receivables Setup";
@@ -499,6 +503,7 @@ var Response: JsonToken
             VALIDATE("Shipment Date", PostingDate);
             VALIDATE("Order Date", PostingDate);
             VALIDATE("Courier Or Advert", TRUE);
+            Validate("Date Range Filter", StrSubstNo('%1-%2', StartDate, EndDate));
             Validate("Location Code", 'HQ');
             VALIDATE("Posting Description", 'Courier invoice for ' + FORMAT(PostingDate));
             lvCustomer.GET(SalesReceivablesSetup."Courier Customer No.");

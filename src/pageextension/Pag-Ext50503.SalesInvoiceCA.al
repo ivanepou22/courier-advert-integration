@@ -10,6 +10,11 @@ pageextension 50503 "Sales Invoice CA" extends "Sales Invoice"
                 ApplicationArea = All;
                 ToolTip = 'Specifies the value of the Courier Or Advert field.';
             }
+            field("Date Range Filter"; Rec."Date Range Filter")
+            {
+                ApplicationArea = All;
+                ToolTip = 'Specifies the value of the Date Range Filter field.';
+            }
         }
     }
 
