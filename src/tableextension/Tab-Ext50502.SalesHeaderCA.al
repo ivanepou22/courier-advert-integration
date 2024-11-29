@@ -10,6 +10,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         field(50501; "Date Range Filter"; Text[50])
         {
             DataClassification = ToBeClassified;
+            Editable = false;
         }
     }
 
@@ -229,58 +230,155 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                                         SalesLine."Unit Price", SalesHeader."Currency Factor"));
                                 END;
                                 SalesLine.VALIDATE("Dimension Set ID", SalesHeader."Dimension Set ID");
+
                                 DetailObject.SelectToken('pod_ref', DetailObjectToken);
-                                SalesLine.pod_ref := DetailObjectToken.AsValue().AsText();
-                                TransactionNo := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then begin
+                                    SalesLine.pod_ref := DetailObjectToken.AsValue().AsText();
+                                    TransactionNo := DetailObjectToken.AsValue().AsText();
+                                end else
+                                    SalesLine.pod_ref := '';
+
                                 DetailObject.SelectToken('billing_model', DetailObjectToken);
-                                SalesLine.billing_model := DetailObjectToken.AsValue().AsText();
-                                DetailObject.SelectToken('fragile', DetailObjectToken);
-                                if DetailObjectToken.AsValue().AsText() = '1' then
-                                    SalesLine.fragile := true
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.billing_model := DetailObjectToken.AsValue().AsText()
                                 else
+                                    SalesLine.billing_model := '';
+
+                                DetailObject.SelectToken('fragile', DetailObjectToken);
+                                if not DetailObjectToken.AsValue().IsNull() then begin
+                                    if DetailObjectToken.AsValue().AsText() = '1' then
+                                        SalesLine.fragile := true
+                                    else
+                                        SalesLine.fragile := false;
+                                end else
                                     SalesLine.fragile := false;
+
                                 DetailObject.SelectToken('fragile_surcharge', DetailObjectToken);
-                                SalesLine.fragile_surcharge := DetailObjectToken.AsValue().AsDecimal();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.fragile_surcharge := DetailObjectToken.AsValue().AsDecimal()
+                                else
+                                    SalesLine.fragile_surcharge := 0;
+
                                 DetailObject.SelectToken('delivery_fee', DetailObjectToken);
-                                SalesLine.delivery_fee := DetailObjectToken.AsValue().AsDecimal();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.delivery_fee := DetailObjectToken.AsValue().AsDecimal()
+                                else
+                                    SalesLine.delivery_fee := 0;
+
                                 DetailObject.SelectToken('vat_fee', DetailObjectToken);
-                                SalesLine.vat_fee := DetailObjectToken.AsValue().AsDecimal();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.vat_fee := DetailObjectToken.AsValue().AsDecimal()
+                                else
+                                    SalesLine.vat_fee := 0;
+
                                 DetailObject.SelectToken('ucc_fee', DetailObjectToken);
-                                SalesLine.ucc_fee := DetailObjectToken.AsValue().AsDecimal();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.ucc_fee := DetailObjectToken.AsValue().AsDecimal()
+                                else
+                                    SalesLine.ucc_fee := 0;
+
                                 DetailObject.SelectToken('total_delivery_fees', DetailObjectToken);
-                                SalesLine.total_delivery_fees := DetailObjectToken.AsValue().AsDecimal();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.total_delivery_fees := DetailObjectToken.AsValue().AsDecimal()
+                                else
+                                    SalesLine.total_delivery_fees := 0;
+
                                 DetailObject.SelectToken('pay_mode', DetailObjectToken);
-                                SalesLine.pay_mode := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.pay_mode := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.pay_mode := '';
+
                                 DetailObject.SelectToken('txn_reference', DetailObjectToken);
-                                SalesLine.txn_reference := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.txn_reference := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.txn_reference := '';
+
                                 DetailObject.SelectToken('pod_date', DetailObjectToken);
-                                SalesLine.pod_date := DetailObjectToken.AsValue().AsDate();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.pod_date := DetailObjectToken.AsValue().AsDate()
+                                else
+                                    SalesLine.pod_date := 0D;
+
                                 DetailObject.SelectToken('sender_name', DetailObjectToken);
-                                SalesLine.sender_name := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.sender_name := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.sender_name := '';
+
                                 DetailObject.SelectToken('sender_tel', DetailObjectToken);
-                                SalesLine.sender_tel := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.sender_tel := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.sender_tel := '';
+
                                 DetailObject.SelectToken('sender_address', DetailObjectToken);
-                                SalesLine.sender_address := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.sender_address := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.sender_address := '';
+
                                 DetailObject.SelectToken('receiver_name', DetailObjectToken);
-                                SalesLine.receiver_name := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.receiver_name := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.receiver_name := '';
+
                                 DetailObject.SelectToken('receiver_tel', DetailObjectToken);
-                                SalesLine.receiver_tel := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.receiver_tel := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.receiver_tel := '';
+
                                 DetailObject.SelectToken('receiver_address', DetailObjectToken);
-                                SalesLine.receiver_address := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.receiver_address := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.receiver_address := '';
+
                                 DetailObject.SelectToken('receiver_town', DetailObjectToken);
-                                SalesLine.receiver_town := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.receiver_town := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.receiver_town := '';
+
                                 DetailObject.SelectToken('receiver_district', DetailObjectToken);
-                                SalesLine.receiver_district := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.receiver_district := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.receiver_district := '';
+
                                 DetailObject.SelectToken('receiver_region', DetailObjectToken);
-                                SalesLine.receiver_region := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.receiver_region := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.receiver_region := '';
+
                                 DetailObject.SelectToken('no_of_pieces', DetailObjectToken);
-                                SalesLine.no_of_pieces := DetailObjectToken.AsValue().AsInteger();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.no_of_pieces := DetailObjectToken.AsValue().AsInteger()
+                                else
+                                    SalesLine.no_of_pieces := 0;
+
                                 DetailObject.SelectToken('package_weight', DetailObjectToken);
-                                SalesLine.package_weight := DetailObjectToken.AsValue().AsDecimal();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.package_weight := DetailObjectToken.AsValue().AsDecimal()
+                                else
+                                    SalesLine.package_weight := 0;
+
                                 DetailObject.SelectToken('package_description', DetailObjectToken);
-                                SalesLine.package_description := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.package_description := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.package_description := '';
+
                                 DetailObject.SelectToken('package_type', DetailObjectToken);
-                                SalesLine.package_type := DetailObjectToken.AsValue().AsText();
+                                if not DetailObjectToken.AsValue().IsNull() then
+                                    SalesLine.package_type := DetailObjectToken.AsValue().AsText()
+                                else
+                                    SalesLine.package_type := '';
+
                                 SalesLine.Insert();
                                 UpdateTransaction(TransactionNo, Enum::"Section Type"::invoice);
                                 LineNo += 1;
@@ -503,7 +601,7 @@ var Response: JsonToken
             VALIDATE("Shipment Date", PostingDate);
             VALIDATE("Order Date", PostingDate);
             VALIDATE("Courier Or Advert", TRUE);
-            Validate("Date Range Filter", StrSubstNo('%1-%2', StartDate, EndDate));
+            Validate("Date Range Filter", StrSubstNo('%1..%2', StartDate, EndDate));
             Validate("Location Code", 'HQ');
             VALIDATE("Posting Description", 'Courier invoice for ' + FORMAT(PostingDate));
             lvCustomer.GET(SalesReceivablesSetup."Courier Customer No.");
