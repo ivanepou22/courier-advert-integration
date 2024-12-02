@@ -112,6 +112,8 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         SuccessToken: JsonToken;
         ResponseToken: JsonToken;
         ResponseArrayText: Text;
+        SalesHeader: Record "Sales Header";
+        DateRange: Text;
     begin
         SalesReceivablesSetup.Get();
         SalesReceivablesSetup.TestField("Courier Customer No.");
@@ -136,10 +138,18 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                         ResponseToken.WriteTo(ResponseArrayText);
                         ResponseArray.ReadFrom(ResponseArrayText);
                         if ResponseArray.Count <> 0 then begin
+                            DateRange := StrSubstNo('%1..%2', StartDate, EndDate);
                             IF SalesHeaderOrder."No." <> '' THEN
                                 FinalizeSalesOrderHeader;
-                            InsertSalesOrderHeader(PostingDate, DocumentType, StartDate, EndDate);
-                            CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.", DocumentType);
+                            SalesHeader.Reset();
+                            SalesHeader.SetRange("Document Type", DocumentType);
+                            SalesHeader.SetRange("Date Range Filter", DateRange);
+                            if SalesHeader.FindFirst() then begin
+                                CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeader."No.", DocumentType, SalesHeader);
+                            end else begin
+                                InsertSalesOrderHeader(PostingDate, DocumentType, StartDate, EndDate);
+                                CreateSalesOrderLines(ResponseContent, PostingDate, SalesHeaderOrder."No.", DocumentType, SalesHeaderOrder);
+                            end;
                         end else begin
                             Message('No Transactions were found for the specified date range: [%1] - [%2]', StartDate, EndDate);
                         end
@@ -149,7 +159,7 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
         end;
     end;
 
-    procedure CreateSalesOrderLines(ResponseContent: Text; PostingDate: Date; salesOrderNo: Code[20]; DocumentType: Enum "Sales Document Type")
+    procedure CreateSalesOrderLines(ResponseContent: Text; PostingDate: Date; salesOrderNo: Code[20]; DocumentType: Enum "Sales Document Type"; var SalesHeaderInvoice: Record "Sales Header")
     var
         SalesLine: Record "Sales Line";
         LineNo: Integer;
@@ -221,15 +231,15 @@ tableextension 50502 "Sales Header CA" extends "Sales Header"
                                 DetailObject.SelectToken('total_delivery_fees', DetailObjectToken);
                                 SalesLine.Validate("Unit Price", DetailObjectToken.AsValue().AsDecimal());
 
-                                IF SalesHeader."Currency Code" <> '' THEN BEGIN
-                                    SalesHeader.TESTFIELD("Currency Factor");
+                                IF SalesHeaderInvoice."Currency Code" <> '' THEN BEGIN
+                                    SalesHeaderInvoice.TESTFIELD("Currency Factor");
                                     SalesLine."Unit Price" :=
                                       ROUND(
                                         CurrencyExchRate.ExchangeAmtLCYToFCY(
-                                        PostingDate, SalesHeader."Currency Code",
-                                        SalesLine."Unit Price", SalesHeader."Currency Factor"));
+                                        PostingDate, SalesHeaderInvoice."Currency Code",
+                                        SalesLine."Unit Price", SalesHeaderInvoice."Currency Factor"));
                                 END;
-                                SalesLine.VALIDATE("Dimension Set ID", SalesHeader."Dimension Set ID");
+                                SalesLine.VALIDATE("Dimension Set ID", SalesHeaderInvoice."Dimension Set ID");
 
                                 DetailObject.SelectToken('pod_ref', DetailObjectToken);
                                 if not DetailObjectToken.AsValue().IsNull() then begin
